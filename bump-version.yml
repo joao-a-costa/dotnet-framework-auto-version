@@ -1,0 +1,89 @@
+name: Auto Bump Repo Version
+
+on:
+  push:
+    branches:
+      - main     # or "master"
+  workflow_dispatch:
+
+jobs:
+  bump:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # needed for git tags
+
+      - name: Setup Git
+        run: |
+          git config user.name "CI Bot"
+          git config user.email "ci-bot@example.com"
+
+      - name: Bump version, commit and tag
+        shell: pwsh
+        run: |
+          Write-Host "========================================"
+          Write-Host "🔍 Starting version bump workflow"
+          Write-Host "========================================"
+
+          # Find AssemblyInfo.cs
+          $assemblyInfo = Get-ChildItem -Path . -Recurse -Filter AssemblyInfo.cs | Select-Object -First 1
+          if (-not $assemblyInfo) {
+            Write-Error "❌ No AssemblyInfo.cs found!"
+            exit 1
+          }
+          Write-Host "✅ Using file: $($assemblyInfo.FullName)"
+
+          # Read file content
+          $content = Get-Content $assemblyInfo.FullName
+          $regexAsm  = 'AssemblyVersion\("(\d+\.\d+\.\d+\.\d+)"\)'
+          $regexFile = 'AssemblyFileVersion\("(\d+\.\d+\.\d+\.\d+)"\)'
+
+          # Prefer AssemblyFileVersion for parsing
+          $match = [regex]::Match(($content -join "`n"), $regexFile)
+          if (-not $match.Success) { $match = [regex]::Match(($content -join "`n"), $regexAsm) }
+          if (-not $match.Success) {
+            Write-Error "❌ Could not extract version!"
+            exit 1
+          }
+
+          # Parse numbers
+          $major, $minor, $patch, $build = $match.Groups[1].Value -split '\.'
+          $patch = [int]$patch + 1
+
+          # Rules: AssemblyVersion ends with .0 | AssemblyFileVersion ends with .1
+          $assemblyVersion = "$major.$minor.$patch.0"
+          $fileVersion     = "$major.$minor.$patch.1"
+
+          Write-Host "🔢 Current version: $($match.Groups[1].Value)"
+          Write-Host "➡️  New AssemblyVersion: $assemblyVersion"
+          Write-Host "➡️  New AssemblyFileVersion: $fileVersion"
+
+          # Replace both
+          $content = $content -replace $regexAsm,  "AssemblyVersion(`"$assemblyVersion`")"
+          $content = $content -replace $regexFile, "AssemblyFileVersion(`"$fileVersion`")"
+          Set-Content $assemblyInfo.FullName $content
+          Write-Host "✍️ Updated AssemblyInfo.cs"
+
+          # Git operations
+          git pull
+          git add $assemblyInfo
+
+          # Prevent empty commits
+          if (git diff --cached --quiet) {
+            Write-Host "⚠️ No changes detected, skipping commit and tag."
+            exit 0
+          }
+
+          git commit -m "v$fileVersion"
+          git push
+          Write-Host "✅ Committed v$fileVersion"
+
+          git tag -a "v$fileVersion" -m "v$fileVersion"
+          git push --tags
+          Write-Host "🏷️ Tagged v$fileVersion"
+
+          Write-Host "========================================"
+          Write-Host "✅ Version bump complete!"
+          Write-Host "========================================"
