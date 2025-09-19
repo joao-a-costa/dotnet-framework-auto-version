@@ -1,6 +1,6 @@
 # dotnet-framework-auto-version
 
-🚀 A GitHub Actions workflow that **automatically bumps the version** of your .NET Framework project (`AssemblyInfo.cs`) on every push to the `main` (or `master`) branch.  
+A GitHub Actions workflow that **automatically bumps the version** of your .NET Framework project (`AssemblyInfo.cs`) on every push to the `main` (or `master`) branch.  
 It also commits the change, creates a Git tag, and pushes it back to the repo.
 
 ---
